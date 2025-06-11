@@ -1,0 +1,26 @@
+# Core Web Framework
+fastapi
+uvicorn[standard]
+websockets
+python-multipart
+
+# Google Agent Development Kit and Dependencies
+google-agent-development-kit
+google-cloud-aiplatform
+google-cloud-storage
+google-cloud-firestore
+google-cloud-pubsub
+
+# Image and WSI Handling
+Pillow
+openslide-python
+tifffile
+
+# Data Handling & Utilities
+numpy
+pandas
+python-dotenv
+diskcache # Useful for caching tiles later
+
+# Note: trident-pathology will be added in a later step
+# to keep this initial setup focused on the core services.
