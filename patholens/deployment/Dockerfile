@@ -8,20 +8,27 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
-# Install system dependencies that may be needed by Python libraries like openslide
+# Install git and system dependencies required by openslide and trident (e.g., libvips)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     openslide-tools \
+    libvips-dev \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy only the requirements file to leverage Docker layer caching
+# --- Install Trident from source ---
+# Clone the repository and install in editable mode so it's in the python path
+RUN git clone https://github.com/mahmoodlab/trident.git /app/trident
+RUN pip install --no-cache-dir -e /app/trident
+
+# Copy only the requirements file for PathoLens to leverage Docker layer caching
 COPY ./patholens/app/requirements.txt .
 
-# Install Python dependencies
+# Install PathoLens's Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy the entire application code into the container
+# Copy the entire PathoLens application code into the container
 COPY ./patholens/app /app
 
 # Expose the port the app will run on
@@ -29,5 +36,4 @@ EXPOSE 8080
 
 # Define the command to run the application using uvicorn
 # The app is located in /app/services/main.py
-# --reload is used for development to automatically restart on code changes
 CMD ["uvicorn", "services.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
