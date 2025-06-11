@@ -73,6 +73,10 @@ async def root():
 
 # The agent interaction endpoint will be added in the next task.
 
+# Include the slide tiling router
+from . import slide_router
+app.include_router(slide_router.router)
+
 # --- Agent Interaction Endpoint ---
 
 from fastapi import Request
