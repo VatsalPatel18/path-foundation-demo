@@ -15,6 +15,7 @@
 """Callable responsible for running Inference on provided patches."""
 
 import functools
+import os
 from typing import Any, Mapping
 
 from huggingface_hub import from_pretrained_keras
@@ -36,8 +37,10 @@ from huggingface_hub import snapshot_download
 
 
 def _load_huggingface_model() -> tf.keras.Model:
-  snapshot_download("google/path-foundation", local_dir="./model")
-  return tf.keras.layers.TFSMLayer('./model', call_endpoint='serving_default') 
+  """Download and load a model from Hugging Face."""
+  model_repo = os.environ.get("HF_MODEL_NAME", "google/path-foundation")
+  snapshot_download(model_repo, local_dir="./model")
+  return tf.keras.layers.TFSMLayer('./model', call_endpoint='serving_default')
   #return from_pretrained_keras("./model", compile=False)
 
 
@@ -49,7 +52,7 @@ def _endpoint_model(ml_model: tf.keras.Model, image: np.ndarray) -> np.ndarray:
   return result['output_0'].numpy()
 
 
-# _ENDPOINT_MODEL = functools.partial(_endpoint_model, _load_huggingface_model())
+_ENDPOINT_MODEL = functools.partial(_endpoint_model, _load_huggingface_model())
 
 
 class PetePredictor:
