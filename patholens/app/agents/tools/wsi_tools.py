@@ -70,3 +70,70 @@ def capture_snapshot(slide_id: str, x: int, y: int, width: int, height: int, lev
         return f"Error capturing snapshot: {e}"
 
 capture_snapshot_tool = FunctionTool.from_function(capture_snapshot)
+
+
+def generate_global_wsi_summary(slide_id: str, tool_context: ToolContext) -> str:
+    """
+    Orchestrates generating a global summary for a WSI. It does this by
+    creating a composite image of several representative tiles and sending
+    that to the MedGemma invocation tool.
+    """
+    slide_gcs_uri = f"gs://{tool_context.app_config.get('WSI_BUCKET')}/originals_for_viewer/{slide_id}"
+
+    try:
+        # For this example, we'll create a 2x2 grid of tiles from a low-power level.
+        # A real implementation could use more sophisticated sampling.
+        client = _initialize_client()
+        if not isinstance(client, storage.Client):
+            raise ConnectionError("GCS client is not available.")
+
+        bucket_name, blob_name = slide_gcs_uri.replace("gs://", "").split("/", 1)
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_name)
+
+        with io.BytesIO(blob.download_as_bytes()) as slide_bytes:
+            slide = openslide.OpenSlide(slide_bytes)
+
+            # Use a lower power level for the overview, e.g., level 2
+            level = 2
+            if level >= slide.level_count:
+                level = slide.level_count - 1
+
+            level_dims = slide.level_dimensions[level]
+
+            # Create a 2x2 grid of tiles from the four quadrants of the slide at this level
+            tile_w, tile_h = 256, 256
+            coords = [
+                (0, 0), (level_dims[0] // 2, 0),
+                (0, level_dims[1] // 2), (level_dims[0] // 2, level_dims[1] // 2)
+            ]
+
+            tiles = [slide.read_region(coord, level, (tile_w, tile_h)).convert("RGB") for coord in coords]
+
+        # Stitch tiles into a single composite image
+        composite_image = Image.new('RGB', (tile_w * 2, tile_h * 2))
+        composite_image.paste(tiles[0], (0, 0))
+        composite_image.paste(tiles[1], (tile_w, 0))
+        composite_image.paste(tiles[2], (0, tile_h))
+        composite_image.paste(tiles[3], (tile_w, tile_h))
+
+        # Save the composite image as a new artifact
+        img_byte_arr = io.BytesIO()
+        composite_image.save(img_byte_arr, format='PNG')
+        image_bytes = img_byte_arr.getvalue()
+
+        filename = f"global_summary_composite_{slide_id}.png"
+        part = types.Part.from_blob(image_bytes, "image/png")
+        tool_context.save_artifact(filename, part)
+
+        # Get the GCS URI of the newly created composite image
+        composite_artifact_uri = f"gs://{tool_context.artifact_service.bucket_name}/{tool_context.artifact_service.get_artifact_path(tool_context, filename)}"
+
+        # Call the MedGemma tool with this composite image
+        from .medgemma_tools import invoke_medgemma
+        return invoke_medgemma(composite_artifact_uri, "global_summary", tool_context)
+
+    except Exception as e:
+        return f"Error generating global summary for slide {slide_id}: {e}"
+
+generate_global_wsi_summary_tool = FunctionTool.from_function(generate_global_wsi_summary)
