@@ -132,3 +132,53 @@ async def run_agent(agent_request: AgentRunRequest, request: Request):
         media_type="text/event-stream"
     )
 
+
+# --- WebSocket Endpoint for UI Telemetry ---
+from fastapi import WebSocket, WebSocketDisconnect
+from .websocket_manager import websocket_manager
+
+@app.websocket("/ws/{session_id}")
+async def websocket_endpoint(websocket: WebSocket, session_id: str):
+    """
+    Handles the WebSocket connection for a given session.
+    Listens for messages from the UI and forwards them to the ADK Runner.
+    """
+    await websocket_manager.connect(websocket, session_id)
+    try:
+        while True:
+            # Wait for a message from the UI
+            data = await websocket.receive_text()
+
+            # Here, we assume the user_id is also part of the ws message
+            # A robust implementation would handle auth to get the user_id
+            # For now, we'll extract it from the payload or use a default.
+            import json
+            try:
+                json_data = json.loads(data)
+                user_id = json_data.get("user_id", "ws_user")
+            except json.JSONDecodeError:
+                user_id = "ws_user" # fallback
+
+            # Create a content object specifically for the UITelemetryCoordinatorAgent
+            # This agent expects a JSON string as its input text
+            ui_event_content = types.Content(parts=[types.Part.from_text(data)])
+
+            # Get the runner from the app state
+            adk_runner = websocket.app.state.runner
+
+            # Run the ADK with this specific content. The RootAgent will delegate
+            # to the UITelemetryCoordinatorAgent, which will then process the event.
+            async for event in adk_runner.run_async(
+                user_id=user_id,
+                session_id=session_id,
+                new_message=ui_event_content,
+                run_config=RunConfig() # Use default run config
+            ):
+                # Any direct feedback from the agent execution can be sent back
+                await websocket_manager.send_json(event.to_dict(), session_id)
+
+    except WebSocketDisconnect:
+        websocket_manager.disconnect(session_id)
+    except Exception as e:
+        print(f"Error in WebSocket for session {session_id}: {e}")
+        websocket_manager.disconnect(session_id)
