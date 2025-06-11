@@ -70,3 +70,24 @@ def update_recent_snapshots(snapshot_gcs_uri: str, summary: str, tool_context: T
 
 archive_note_tool = FunctionTool.from_function(archive_note_to_firestore)
 update_recent_snapshots_tool = FunctionTool.from_function(update_recent_snapshots)
+
+def get_slide_metadata(slide_id: str) -> dict:
+    """
+    Retrieves metadata for a given slide_id from the 'slide_metadata' collection in Firestore.
+    This tool does not require ToolContext.
+    """
+    client = _initialize_client()
+    if not isinstance(client, firestore.Client):
+        return {"error": "Firestore client is not available."}
+    
+    try:
+        doc_ref = client.collection("slide_metadata").document(slide_id)
+        doc = doc_ref.get()
+        if doc.exists:
+            return doc.to_dict()
+        else:
+            return {"error": f"No metadata found for slide_id: {slide_id}"}
+    except Exception as e:
+        return {"error": f"Error fetching slide metadata: {e}"}
+
+get_slide_metadata_tool = FunctionTool.from_function(get_slide_metadata)

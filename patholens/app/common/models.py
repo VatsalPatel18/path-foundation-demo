@@ -26,3 +26,8 @@ class AgentRunRequest(BaseModel):
         description="Optional ADK RunConfig parameters."
     )
 
+
+class SlideProcessingRequest(BaseModel):
+    """Defines the request to process a new WSI."""
+    slide_id: str = Field(..., example="TCGA-AA-3554-01A-01-TS1")
+    gcs_uri: str = Field(..., example="gs://your-wsi-bucket-name/raw/TCGA-AA-3554-01A-01-TS1.svs")

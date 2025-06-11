@@ -1,7 +1,10 @@
 import io
-from fastapi import APIRouter, HTTPException, Depends
+import os
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import Response
 from app.agents.tools.wsi_tools import load_wsi_tile
+from app.common.models import SlideProcessingRequest
+from app.trident_processing.processor import process_wsi_with_trident
 
 router = APIRouter()
 
@@ -18,24 +21,21 @@ async def get_wsi_tile(
     level: int,
     x: int,
     y: int,
-    wsi_bucket: str = Depends(get_wsi_bucket)
 ):
     """
     Serves a single tile from a Whole-Slide Image stored in GCS.
     This endpoint is designed to be used by a tile viewer like OpenSeadragon.
     """
     try:
-        # Assumes tile size is known, e.g., 256x256. This could be a query param.
-        tile_size = 256
+        from app.agents.tools.storage_tools import get_slide_metadata
+        # Fetch metadata from Firestore to get the GCS path
+        metadata = get_slide_metadata(slide_id)
+        slide_gcs_uri = metadata.get('gcs_original_path')
+        if not slide_gcs_uri:
+            raise HTTPException(status_code=404, detail=f"GCS path for slide {slide_id} not found in metadata.")
 
-        # The tile coordinate (x,y) from viewers is typically the top-left pixel of the tile.
-        # We need to map this to the level 0 coordinates that openslide expects.
-        # This is a simplified mapping; a real implementation would need slide-specific properties.
-        # For now, we assume x and y are already the level 0 coordinates.
+        tile_size = 256  # Assumed tile size
 
-        slide_gcs_uri = f"gs://{wsi_bucket}/originals_for_viewer/{slide_id}"
-
-        # We use the existing tool's utility function
         image = load_wsi_tile(slide_gcs_uri, x, y, tile_size, tile_size, level)
 
         with io.BytesIO() as output:
@@ -44,3 +44,24 @@ async def get_wsi_tile(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not retrieve WSI tile: {e}")
+
+
+@router.post("/process", status_code=202, tags=["WSI Processing"])
+async def trigger_slide_processing(
+    request: SlideProcessingRequest,
+    background_tasks: BackgroundTasks
+):
+    """
+    Accepts a WSI for processing and triggers the Trident pipeline
+    as a background task.
+    """
+    output_gcs_base_path = f"gs://{os.getenv('WSI_BUCKET')}/processed/trident_output"
+
+    background_tasks.add_task(
+        process_wsi_with_trident,
+        request.slide_id,
+        request.gcs_uri,
+        output_gcs_base_path
+    )
+
+    return {"message": "Slide processing initiated.", "slide_id": request.slide_id}
