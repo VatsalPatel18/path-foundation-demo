@@ -4,7 +4,7 @@ from google.adk.agents import LlmAgent
 # In the future, we will import and define the sub-agents here.
 # For now, we will leave them as placeholder strings.
 # from .slide_manager import slide_manager_agent
-# from .snapshot_manager import snapshot_manager_agent
+from .snapshot_manager import snapshot_manager_agent
 
 # Define the instruction for the root agent. This guides its behavior.
 ROOT_AGENT_INSTRUCTION = """
@@ -29,7 +29,7 @@ root_agent = LlmAgent(
         # Placeholder agents. We will create these actual agent objects later.
         # For now, this structure allows the RootAgent to be aware of them.
         LlmAgent(name="SlideManagerAgent", description="Manages whole-slide image context and global summaries."),
-        LlmAgent(name="SnapshotManagerAgent", description="Analyzes real-time viewport snapshots."),
+        snapshot_manager_agent,
         LlmAgent(name="MarkedRegionManagerAgent", description="Processes user-marked Regions of Interest (ROIs)."),
         LlmAgent(name="UITelemetryCoordinatorAgent", description="Handles UI events and telemetry."),
     ],
