@@ -4,12 +4,12 @@ from PIL import Image
 from google.cloud import storage
 from google.adk.tools import FunctionTool, ToolContext
 from google.adk import types
+from .storage_tools import get_slide_metadata
 
-# This is a placeholder. In a real app, the GCS client would be initialized
-# once and passed via context or a dependency injection system.
 storage_client = None
 
-def _initialize_client():
+
+def _initialize_gcs_client():
     """Lazy initializer for the GCS client."""
     global storage_client
     if storage_client is None:
@@ -20,30 +20,26 @@ def _initialize_client():
             storage_client = "Dummy"
     return storage_client
 
+
 def load_wsi_tile(slide_gcs_uri: str, x: int, y: int, width: int, height: int, level: int) -> Image.Image:
-    """
-    Fetches a specific tile/region from a WSI stored in GCS.
-    """
-    client = _initialize_client()
+    """ Fetches a specific tile/region from a WSI stored in GCS. """
+    client = _initialize_gcs_client()
     if not isinstance(client, storage.Client):
         raise ConnectionError("GCS client is not available.")
 
     bucket_name, blob_name = slide_gcs_uri.replace("gs://", "").split("/", 1)
-    bucket = client.bucket(bucket_name)
-    blob = bucket.blob(blob_name)
+    blob = client.bucket(bucket_name).blob(blob_name)
 
     with io.BytesIO(blob.download_as_bytes()) as slide_bytes:
         slide = openslide.OpenSlide(slide_bytes)
         tile = slide.read_region((x, y), level, (width, height))
-        # Return as RGBA and then convert to RGB for consistency, as some formats have alpha channels
         return tile.convert("RGB")
+
 
 def capture_snapshot(slide_id: str, x: int, y: int, width: int, height: int, level: int, tool_context: ToolContext) -> str:
     """
-    Captures the current viewport or a specified ROI as an image,
-    saves it to the GCS Artifact Service, and returns its GCS URI.
+    Captures a viewport/ROI, saves it to GCS Artifact Service, and returns the URI.
     """
-    from .storage_tools import get_slide_metadata
     metadata = get_slide_metadata(slide_id)
     slide_gcs_uri = metadata.get("gcs_original_path")
     if not slide_gcs_uri:
@@ -51,45 +47,33 @@ def capture_snapshot(slide_id: str, x: int, y: int, width: int, height: int, lev
 
     try:
         image = load_wsi_tile(slide_gcs_uri, x, y, width, height, level)
-
         img_byte_arr = io.BytesIO()
         image.save(img_byte_arr, format='PNG')
-        image_bytes = img_byte_arr.getvalue()
-
         filename = f"snapshot_{slide_id}_L{level}_{x}_{y}.png"
-        part = types.Part.from_blob(image_bytes, "image/png")
-
+        part = types.Part.from_blob(img_byte_arr.getvalue(), "image/png")
         tool_context.save_artifact(filename, part)
-
         artifact_uri = f"gs://{tool_context.artifact_service.bucket_name}/{tool_context.artifact_service.get_artifact_path(tool_context, filename)}"
         return f"Successfully saved snapshot to {artifact_uri}"
-
     except Exception as e:
         return f"Error capturing snapshot: {e}"
-
-capture_snapshot_tool = FunctionTool.from_function(capture_snapshot)
 
 
 def generate_global_wsi_summary(slide_id: str, tool_context: ToolContext) -> str:
     """
-    Orchestrates generating a global summary for a WSI. It does this by
-    creating a composite image of several representative tiles and sending
-    that to the MedGemma invocation tool.
+    Orchestrates generating a global summary for a WSI by creating a composite image.
     """
-    from .storage_tools import get_slide_metadata
     metadata = get_slide_metadata(slide_id)
     slide_gcs_uri = metadata.get("gcs_original_path")
     if not slide_gcs_uri:
         return f"Error: Could not find GCS path in metadata for slide {slide_id}"
 
     try:
-        client = _initialize_client()
+        client = _initialize_gcs_client()
         if not isinstance(client, storage.Client):
             raise ConnectionError("GCS client is not available.")
 
         bucket_name, blob_name = slide_gcs_uri.replace("gs://", "").split("/", 1)
-        bucket = client.bucket(bucket_name)
-        blob = bucket.blob(blob_name)
+        blob = client.bucket(bucket_name).blob(blob_name)
 
         with io.BytesIO(blob.download_as_bytes()) as slide_bytes:
             slide = openslide.OpenSlide(slide_bytes)
@@ -105,25 +89,23 @@ def generate_global_wsi_summary(slide_id: str, tool_context: ToolContext) -> str
             tiles = [slide.read_region(coord, level, (tile_w, tile_h)).convert("RGB") for coord in coords]
 
         composite_image = Image.new('RGB', (tile_w * 2, tile_h * 2))
-        composite_image.paste(tiles[0], (0, 0))
-        composite_image.paste(tiles[1], (tile_w, 0))
-        composite_image.paste(tiles[2], (0, tile_h))
-        composite_image.paste(tiles[3], (tile_w, tile_h))
-
+        composite_image.paste(tiles[0], (0, 0)); composite_image.paste(tiles[1], (tile_w, 0))
+        composite_image.paste(tiles[2], (0, tile_h)); composite_image.paste(tiles[3], (tile_w, tile_h))
+        
         img_byte_arr = io.BytesIO()
         composite_image.save(img_byte_arr, format='PNG')
-        image_bytes = img_byte_arr.getvalue()
-
+        
         filename = f"global_summary_composite_{slide_id}.png"
-        part = types.Part.from_blob(image_bytes, "image/png")
+        part = types.Part.from_blob(img_byte_arr.getvalue(), "image/png")
         tool_context.save_artifact(filename, part)
-
+        
         composite_artifact_uri = f"gs://{tool_context.artifact_service.bucket_name}/{tool_context.artifact_service.get_artifact_path(tool_context, filename)}"
 
         from .medgemma_tools import invoke_medgemma
         return invoke_medgemma(composite_artifact_uri, "global_summary", tool_context)
-
     except Exception as e:
         return f"Error generating global summary for slide {slide_id}: {e}"
 
+
+capture_snapshot_tool = FunctionTool.from_function(capture_snapshot)
 generate_global_wsi_summary_tool = FunctionTool.from_function(generate_global_wsi_summary)
