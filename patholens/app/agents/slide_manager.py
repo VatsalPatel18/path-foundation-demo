@@ -10,7 +10,7 @@ To do this, call the `generate_global_wsi_summary_tool` with the slide_id.
 
 slide_manager_agent = LlmAgent(
     name="SlideManagerAgent",
-    model=os.getenv("SLIDE_AGENT_MODEL", "gemini-1.5-flash"), # Add SLIDE_AGENT_MODEL to .env.example
+    model=os.getenv("SLIDE_AGENT_MODEL", "gemini-2.5-flash"), # Add SLIDE_AGENT_MODEL to .env.example
     instruction=SLIDE_MANAGER_INSTRUCTION,
     tools=[
         generate_global_wsi_summary_tool,

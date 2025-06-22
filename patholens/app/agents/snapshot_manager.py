@@ -17,7 +17,7 @@ Workflow:
 
 snapshot_manager_agent = LlmAgent(
     name="SnapshotManagerAgent",
-    model=os.getenv("SNAPSHOT_AGENT_MODEL", "gemini-1.5-flash"),
+    model=os.getenv("SNAPSHOT_AGENT_MODEL", "gemini-2.5-flash"),
     instruction=SNAPSHOT_MANAGER_INSTRUCTION,
     tools=[
         capture_snapshot_tool,

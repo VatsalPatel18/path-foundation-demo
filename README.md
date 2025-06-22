@@ -32,10 +32,10 @@ GCS_ARTIFACT_BUCKET="your-patholens-artifacts-bucket"
 WSI_BUCKET="your-patholens-wsi-bucket"
 
 # --- Agent Model Configuration ---
-ROOT_AGENT_MODEL="gemini-1.5-flash-001"
-SNAPSHOT_AGENT_MODEL="gemini-1.5-flash-001"
-ROI_AGENT_MODEL="gemini-1.5-flash-001"
-SLIDE_AGENT_MODEL="gemini-1.5-flash-001"
+ROOT_AGENT_MODEL="gemini-2.5-flash"
+SNAPSHOT_AGENT_MODEL="gemini-2.5-flash"
+ROI_AGENT_MODEL="gemini-2.5-flash"
+SLIDE_AGENT_MODEL="gemini-2.5-flash"
 ```
 
 ## Setup Instructions
