@@ -16,7 +16,7 @@ Based on the user's message, determine which agent is best suited and transfer c
 
 root_agent = LlmAgent(
     name="PathoLensRootAgent",
-    model=os.getenv("ROOT_AGENT_MODEL", "gemini-1.5-flash"),
+    model=os.getenv("ROOT_AGENT_MODEL", "gemini-2.5-flash"),
     instruction=ROOT_AGENT_INSTRUCTION,
     sub_agents=[
         slide_manager_agent,

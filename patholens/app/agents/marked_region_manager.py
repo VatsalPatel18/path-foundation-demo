@@ -17,7 +17,7 @@ Workflow:
 
 marked_region_manager_agent = LlmAgent(
     name="MarkedRegionManagerAgent",
-    model=os.getenv("ROI_AGENT_MODEL", "gemini-1.5-flash"), # You can add ROI_AGENT_MODEL to .env.example
+    model=os.getenv("ROI_AGENT_MODEL", "gemini-2.5-flash"), # You can add ROI_AGENT_MODEL to .env.example
     instruction=MARKED_REGION_MANAGER_INSTRUCTION,
     tools=[
         capture_snapshot_tool,
